@@ -23,8 +23,8 @@ enum RequestParserState {
     End
 }
 
-pub fn parse_raw_request(mut raw_request: TcpStream) -> HttpRequest {
-    let mut reader = BufReader::new(&mut raw_request);
+pub fn parse_raw_request(mut stream: TcpStream) -> std::io::Result<HttpRequest> {
+    let mut reader = BufReader::new(&mut stream);
     let mut buffer: Vec<u8> = vec![];
     let mut parse_state = RequestParserState::InMethod;
 
@@ -38,23 +38,23 @@ pub fn parse_raw_request(mut raw_request: TcpStream) -> HttpRequest {
     loop {
         match parse_state {
             RequestParserState::InMethod => {
-                reader.read_until(b' ', &mut buffer).unwrap();
+                reader.read_until(b' ', &mut buffer)?;
                 method = str::from_utf8(&buffer).unwrap().trim_end().to_string();
                 parse_state = RequestParserState::InRoute;
             }
             RequestParserState::InRoute => {
-                reader.read_until(b' ', &mut buffer).unwrap();
+                reader.read_until(b' ', &mut buffer)?;
                 route = str::from_utf8(&buffer).unwrap().trim_end().to_string();
                 parse_state = RequestParserState::InVersion;
             }
             RequestParserState::InVersion => {
-                reader.read_until(b'\n', &mut buffer).unwrap();
+                reader.read_until(b'\n', &mut buffer)?;
                 version = str::from_utf8(&buffer).unwrap().trim_end().to_string();
                 parse_state = RequestParserState::InHeader;
             }
             RequestParserState::InHeader => {
                 let mut header_buffer = String::new();
-                reader.read_line(&mut header_buffer).unwrap();
+                reader.read_line(&mut header_buffer)?;
 
                 if header_buffer == "\r\n" {
                     // Finished reading headers, hit separating blank line
@@ -75,7 +75,7 @@ pub fn parse_raw_request(mut raw_request: TcpStream) -> HttpRequest {
                         .parse::<usize>()
                         .unwrap();
                     let mut body_buffer = vec![0u8; content_length];
-                    reader.read_exact(&mut body_buffer).unwrap();
+                    reader.read_exact(&mut body_buffer)?;
                     body = str::from_utf8(&body_buffer).unwrap().to_string();
                 }
                 parse_state = RequestParserState::End;
@@ -88,13 +88,12 @@ pub fn parse_raw_request(mut raw_request: TcpStream) -> HttpRequest {
         }
     }
 
-    let request = HttpRequest {
-        _raw_request: raw_request,
+    Ok(HttpRequest {
+        _raw_request: reader.into_inner().try_clone().unwrap(),
         method: method,
         route: route,
         protocol_version: version,
         headers: headers,
         body: body
-    };
-    request
+    })
 }

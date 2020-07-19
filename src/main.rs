@@ -20,8 +20,9 @@ fn main() -> std::io::Result<()> {
     let listener = TcpListener::bind("127.0.0.1:8080")?;
 
     for stream in listener.incoming() {
-        let mut stream = stream?;
-        let request: request::HttpRequest = request::parse_raw_request(stream.try_clone().unwrap());
+        let stream = stream?;
+        let mut write_stream = stream.try_clone().unwrap();
+        let request: request::HttpRequest = request::parse_raw_request(stream)?;
 
         // TODO:
         // Second iteration: export routes to functions
@@ -29,8 +30,8 @@ fn main() -> std::io::Result<()> {
         if request.route == "/" {
             let response = "HTTP/1.1 200 OK\r\n\r\nHello, user!\r\n";
 
-            stream.write_all(response.as_bytes())?;
-            stream.flush()?;
+            write_stream.write_all(response.as_bytes())?;
+            write_stream.flush()?;
         }
     }
 
