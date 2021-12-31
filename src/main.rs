@@ -11,13 +11,52 @@
 
 mod request;
 
+use std::collections::HashMap;
+use std::env;
 use std::net::TcpListener;
 use std::io::Write;
 
+fn parse_args(args: Vec<String>) -> std::io::Result<HashMap<String, String>> {
+    let mut options: HashMap<String, String> = HashMap::new();
+    let mut chunked_args = args.chunks_exact(2);
+
+    loop {
+        let next_chunk = chunked_args.next();
+        if next_chunk.is_none() {
+            break;
+        }
+        // Convert arguments from String to str in order to pattern match
+        let unwrapped_chunk: Vec<_> = next_chunk.unwrap()
+            .iter()
+            .map(|s| s.as_str())
+            .collect();
+
+        match unwrapped_chunk.as_slice() {
+            ["-o", value] => {
+                options.insert("address".to_owned(), value.to_string());
+            }
+            ["-p", value] => {
+                options.insert("port".to_owned(), value.to_string());
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    Ok(options)
+}
+
 fn main() -> std::io::Result<()> {
-    // TODO: pass via parameter
-    // question mark is a shorthand to a match statement, to handle side effect errors
-    let listener = TcpListener::bind("127.0.0.1:8080")?;
+    let mut args: Vec<String> = env::args().collect();
+    args.remove(0);
+    let options: HashMap<String, String> = parse_args(args)?;
+
+    let connection_string = &format!(
+        "{}:{}",
+        options.get("address").unwrap_or(&"127.0.0.1".to_string()),
+        options.get("port").unwrap_or(&"8080".to_string())
+    );
+
+    let listener = TcpListener::bind(connection_string)?;
 
     for stream in listener.incoming() {
         let stream = stream?;
